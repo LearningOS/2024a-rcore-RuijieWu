@@ -14,12 +14,13 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
-use crate::config::MAX_APP_NUM;
+use crate::config::{MAX_APP_NUM, MAX_SYSCALL_NUM};
 use crate::loader::{get_num_app, init_app_cx};
 use crate::sync::UPSafeCell;
+use crate::timer::get_time_ms;
 use lazy_static::*;
 use switch::__switch;
-pub use task::{TaskControlBlock, TaskStatus};
+pub use task::{TaskControlBlock, TaskStatus,TaskInfo};
 
 pub use context::TaskContext;
 
@@ -52,8 +53,10 @@ lazy_static! {
     pub static ref TASK_MANAGER: TaskManager = {
         let num_app = get_num_app();
         let mut tasks = [TaskControlBlock {
-            task_cx: TaskContext::zero_init(),
             task_status: TaskStatus::UnInit,
+            task_cx: TaskContext::zero_init(),
+            task_info: TaskInfo{syscall_count: [0_u32; MAX_SYSCALL_NUM],time: 0_usize,},
+            first_dispatched_time: 0,
         }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
@@ -70,7 +73,6 @@ lazy_static! {
         }
     };
 }
-
 impl TaskManager {
     /// Run the first task in task list.
     ///
@@ -135,6 +137,35 @@ impl TaskManager {
             panic!("All applications completed!");
         }
     }
+
+    fn get_current_task(&self) -> usize {
+        self.inner.sharing_access().current_task
+    }
+
+    fn get_task_info(&self, id: usize) -> TaskInfo {
+        self.inner.exclusive_access().tasks[id].task_info 
+    }
+
+    fn increase_syscall_count(&self, task_id: usize, call_id: usize) {
+        let curr = &mut self.inner.exclusive_access().tasks[task_id];
+        curr.task_info.syscall_count[call_id] += 1;
+        curr.task_info.time = get_time_ms() - curr.first_dispatched_time;
+    }
+}
+
+/// Returns current task id.
+pub fn get_current_task() -> usize {
+    TASK_MANAGER.get_current_task()
+}
+
+/// Returns the Task info.
+pub fn get_task_info(id: usize) -> TaskInfo {
+    TASK_MANAGER.get_task_info(id)
+}
+
+/// Update syscall counter
+pub fn increase_syscall_count(task_id: usize, call_id: usize) {
+    TASK_MANAGER.increase_syscall_count(task_id, call_id);
 }
 
 /// Run the first task in task list.
