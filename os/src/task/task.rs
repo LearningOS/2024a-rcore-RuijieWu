@@ -1,6 +1,6 @@
 //! Types related to task management
 
-use crate::task::TaskContext;
+use crate::task::{TaskContext, MAX_SYSCALL_NUM};
 /// The task control block (TCB) of a task.
 #[derive(Copy, Clone)]
 pub struct TaskControlBlock {
