@@ -24,7 +24,7 @@ impl<T> UPSafeCell<T> {
     }
 
     /// Give S lock
-    pub fn sharing_access(&self) -> Ref<'_, T>{
+    pub fn sharing_access(&self) -> Ref<'_, T> {
         self.inner.borrow()
     }
 

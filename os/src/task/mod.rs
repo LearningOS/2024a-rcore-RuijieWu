@@ -14,14 +14,14 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
-use crate::config::{MAX_APP_NUM, MAX_SYSCALL_NUM};
+use crate::config::MAX_APP_NUM;
 use crate::loader::{get_num_app, init_app_cx};
 use crate::sync::UPSafeCell;
-use crate::timer::get_time_ms;
 use lazy_static::*;
 use switch::__switch;
-pub use task::{TaskControlBlock, TaskStatus,TaskInfo};
+pub use task::{TaskControlBlock, TaskInfo, TaskStatus};
 
+use crate::timer::get_time_ms;
 pub use context::TaskContext;
 
 /// The task manager, where all the tasks are managed.
@@ -53,14 +53,13 @@ lazy_static! {
     pub static ref TASK_MANAGER: TaskManager = {
         let num_app = get_num_app();
         let mut tasks = [TaskControlBlock {
-            task_status: TaskStatus::UnInit,
             task_cx: TaskContext::zero_init(),
-            task_info: TaskInfo{syscall_count: [0_u32; MAX_SYSCALL_NUM],time: 0_usize,},
+            task_info: TaskInfo{ status: TaskStatus::UnInit, syscall_count: [0_u32; MAX_SYSCALL_NUM], time: 0_usize },
             first_dispatched_time: 0,
         }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
-            task.task_status = TaskStatus::Ready;
+            task.task_info.status = TaskStatus::Ready;
         }
         TaskManager {
             num_app,
@@ -82,7 +81,7 @@ impl TaskManager {
     fn run_first_task(&self) -> ! {
         let mut inner = self.inner.exclusive_access();
         let task0 = &mut inner.tasks[0];
-        task0.task_status = TaskStatus::Running;
+        task0.task_info.status = TaskStatus::Running;
         task0.first_dispatched_time = get_time_ms();
         let next_task_cx_ptr = &task0.task_cx as *const TaskContext;
         drop(inner);
@@ -98,14 +97,14 @@ impl TaskManager {
     fn mark_current_suspended(&self) {
         let mut inner = self.inner.exclusive_access();
         let current = inner.current_task;
-        inner.tasks[current].task_status = TaskStatus::Ready;
+        inner.tasks[current].task_info.status = TaskStatus::Ready;
     }
 
     /// Change the status of current `Running` task into `Exited`.
     fn mark_current_exited(&self) {
         let mut inner = self.inner.exclusive_access();
         let current = inner.current_task;
-        inner.tasks[current].task_status = TaskStatus::Exited;
+        inner.tasks[current].task_info.status = TaskStatus::Exited;
     }
 
     /// Find next task to run and return task id.
@@ -116,7 +115,7 @@ impl TaskManager {
         let current = inner.current_task;
         (current + 1..current + self.num_app + 1)
             .map(|id| id % self.num_app)
-            .find(|id| inner.tasks[*id].task_status == TaskStatus::Ready)
+            .find(|id| inner.tasks[*id].task_info.status == TaskStatus::Ready)
     }
 
     /// Switch current `Running` task to the task we have found,
@@ -125,7 +124,7 @@ impl TaskManager {
         if let Some(next) = self.find_next_task() {
             let mut inner = self.inner.exclusive_access();
             let current = inner.current_task;
-            inner.tasks[next].task_status = TaskStatus::Running;
+            inner.tasks[next].task_info.status = TaskStatus::Running;
             let fdt = &mut inner.tasks[next].first_dispatched_time;
             if *fdt == 0 {
                 *fdt = get_time_ms();
@@ -149,7 +148,7 @@ impl TaskManager {
     }
 
     fn get_task_info(&self, id: usize) -> TaskInfo {
-        self.inner.exclusive_access().tasks[id].task_info 
+        self.inner.exclusive_access().tasks[id].task_info
     }
 
     fn increase_syscall_count(&self, task_id: usize, call_id: usize) {
@@ -159,12 +158,12 @@ impl TaskManager {
     }
 }
 
-/// Returns current task id.
+/// Get current task id.
 pub fn get_current_task() -> usize {
     TASK_MANAGER.get_current_task()
 }
 
-/// Returns the Task info.
+/// Get the Task info.
 pub fn get_task_info(id: usize) -> TaskInfo {
     TASK_MANAGER.get_task_info(id)
 }

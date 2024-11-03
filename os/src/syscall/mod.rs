@@ -25,9 +25,8 @@ mod fs;
 mod process;
 
 use fs::*;
-pub use process::*;
-use super::task::{get_current_task, increase_syscall_count,TaskInfo};
-
+use process::*;
+use super::task::*;
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {
     let id = get_current_task();
