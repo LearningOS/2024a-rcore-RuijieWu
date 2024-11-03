@@ -14,7 +14,7 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
-use crate::config::{MAX_APP_NUM, MAX_SYSCALL_NUM};
+use crate::config::MAX_APP_NUM;
 use crate::loader::{get_num_app, init_app_cx};
 use crate::sync::UPSafeCell;
 use lazy_static::*;
@@ -54,7 +54,7 @@ lazy_static! {
         let num_app = get_num_app();
         let mut tasks = [TaskControlBlock {
             task_cx: TaskContext::zero_init(),
-            task_info: TaskInfo{ status: TaskStatus::UnInit, syscall_count: [0_u32; MAX_SYSCALL_NUM], time: 0_usize },
+            task_info: TaskInfo::new(),
             first_dispatched_time: 0,
         }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
@@ -126,9 +126,7 @@ impl TaskManager {
             let current = inner.current_task;
             inner.tasks[next].task_info.status = TaskStatus::Running;
             let fdt = &mut inner.tasks[next].first_dispatched_time;
-            if *fdt == 0 {
-                *fdt = get_time_ms();
-            }
+            if *fdt == 0  { *fdt = get_time_ms();}
             inner.current_task = next;
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
             let next_task_cx_ptr = &inner.tasks[next].task_cx as *const TaskContext;
@@ -143,34 +141,35 @@ impl TaskManager {
         }
     }
 
-    fn get_current_task(&self) -> usize {
-        self.inner.sharing_access().current_task
-    }
+    fn get_current_task(&self) -> usize { self.inner.shared_access().current_task }
 
-    fn get_task_info(&self, id: usize) -> TaskInfo {
-        self.inner.exclusive_access().tasks[id].task_info
-    }
+    fn get_task_info(&self, id: usize) -> TaskInfo
+    { self.inner.exclusive_access().tasks[id].task_info }
 
-    fn increase_syscall_count(&self, task_id: usize, call_id: usize) {
+    fn log_syscall(&self, task_id: usize, call_id: usize)
+    {
         let curr = &mut self.inner.exclusive_access().tasks[task_id];
-        curr.task_info.syscall_count[call_id] += 1;
+        curr.task_info.syscall_times[call_id] += 1;
         curr.task_info.time = get_time_ms() - curr.first_dispatched_time;
     }
 }
 
-/// Get current task id.
-pub fn get_current_task() -> usize {
+/// Returns current task id.
+pub fn get_current_task() -> usize
+{
     TASK_MANAGER.get_current_task()
 }
 
-/// Get the Task info.
-pub fn get_task_info(id: usize) -> TaskInfo {
+/// Returns the Task info.
+pub fn get_task_info(id: usize) -> TaskInfo
+{
     TASK_MANAGER.get_task_info(id)
 }
 
-/// Update syscall counter
-pub fn increase_syscall_count(task_id: usize, call_id: usize) {
-    TASK_MANAGER.increase_syscall_count(task_id, call_id);
+/// log the syscall for TaskInfo's syscall_times and last syscall time.
+pub fn log_syscall(task_id: usize, call_id: usize)
+{
+    TASK_MANAGER.log_syscall(task_id, call_id);
 }
 
 /// Run the first task in task list.

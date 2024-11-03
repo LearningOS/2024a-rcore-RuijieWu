@@ -1,6 +1,7 @@
 //! Types related to task management
 
-use crate::task::{TaskContext, MAX_SYSCALL_NUM};
+use crate::config::MAX_SYSCALL_NUM;
+use crate::task::TaskContext;
 /// The task control block (TCB) of a task.
 #[derive(Copy, Clone)]
 pub struct TaskControlBlock {
@@ -18,9 +19,19 @@ pub struct TaskInfo {
     /// Task status in it's life cycle
     pub status: TaskStatus,
     /// The numbers of syscall called by task
-    pub syscall_count: [u32; MAX_SYSCALL_NUM],
+    pub syscall_times: [u32; MAX_SYSCALL_NUM],
     /// Total running time of task
     pub time: usize,
+}
+
+impl TaskInfo
+{
+    pub(crate) fn new() -> Self {
+        TaskInfo{
+            status: TaskStatus::UnInit,
+            syscall_times: [0_u32; MAX_SYSCALL_NUM],
+            time: 0_usize,}
+    }
 }
 
 /// The status of a task
