@@ -162,9 +162,11 @@ impl Inode {
         )))
         // release efs lock automatically by compiler
     }
+    /// fucking missing docs
     pub fn create(&self, name: &str) -> Option<Arc<Inode>> {
         self.create_child(name, None)
     }
+    /// fucking missing docs
     pub fn create_link_id(&self, name: &str, from_inode_id: u32) -> Option<Arc<Inode>> {
         self.create_child(name, Some(from_inode_id))
     }
